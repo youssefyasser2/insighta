@@ -42,7 +42,7 @@ Preview the app interface:
 
 <p align="center">
   <img src="assets/images/logo1.png" alt="Screenshot 1" width="250"/>
-  <img src="assets/images/screenshot2.png" alt="Screenshot 2" width="250"/>
+  <img src="assets/images/Screenshot2.png" alt="Screenshot 2" width="250"/>
 </p>
 
 ---
