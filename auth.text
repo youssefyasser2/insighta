@@ -1,0 +1,357 @@
+// import 'dart:math';
+
+// import 'package:dio/dio.dart';
+// import 'package:flutter_bloc/flutter_bloc.dart';
+// import 'package:test_app/core/utils/auth_storage.dart';
+// import 'package:test_app/features/auth/data/models/user_model.dart';
+// import 'package:test_app/features/auth/logic/auth_state.dart';
+// import 'package:test_app/core/utils/validators.dart';
+
+// class AuthCubit extends Cubit<AuthState> {
+//   AuthCubit() : super(AuthInitial());
+
+//   final Dio _dio = Dio(
+//     BaseOptions(
+//       baseUrl: "https://67b8b14a699a8a7baef4f48b.mockapi.io/api",
+//       contentType: Headers.jsonContentType,
+//     ),
+//   );
+
+//   bool stayConnected = false;
+
+//   /// ✅ تسجيل الدخول
+//   Future<void> login(String email, String password) async {
+//     if (email.isEmpty || password.isEmpty) {
+//       emit(AuthFailure("Email and password cannot be empty"));
+//       return;
+//     }
+
+//     emit(AuthLoading());
+
+//     try {
+//       final response = await _dio.get(
+//         'login',
+//       ); // تأكد من أن هذا هو الـ endpoint الصحيح
+
+//       print("🔹 Server Response: ${response.data}");
+
+//       if (response.statusCode == 200) {
+//         final List<dynamic> data = response.data;
+
+//         final user = data.cast<Map<String, dynamic>>().firstWhere(
+//           (user) =>
+//               user['email']?.toString().trim() == email.trim() &&
+//               user['password']?.toString().trim() == password.trim(),
+//           orElse: () => <String, dynamic>{}, // ✅ تصحيح الإرجاع بدلًا من `null`
+//         );
+
+//         if (user.isEmpty) {
+//           // ✅ الآن يتحقق مما إذا كان المستخدم موجودًا
+//           emit(AuthFailure("Invalid email or password"));
+//           return;
+//         }
+
+//         final userModel = UserModel.fromJson({
+//           ...user,
+//           'accessToken': user['accessToken'] ?? _generateToken(),
+//           'refreshToken': user['refreshToken'] ?? _generateToken(),
+//           'expiresIn':
+//               user['expiresIn'] ??
+//               DateTime.now().add(Duration(hours: 1)).toIso8601String(),
+//         });
+
+//         await AuthStorage.saveTokens(
+//           accessToken: userModel.accessToken,
+//           refreshToken: userModel.refreshToken,
+//           expiresIn: userModel.expiresIn.toIso8601String(),
+//         );
+
+//         print("✅ Login Successful! User ID: ${userModel.id}");
+
+//         emit(AuthSuccess(userId: userModel.id, user: userModel));
+//       } else {
+//         emit(
+//           AuthFailure(
+//             "Failed to load data. Status code: ${response.statusCode}",
+//           ),
+//         );
+//       }
+//     } on DioException catch (e) {
+//       print("❌ DioException: ${e.message}");
+//       print("🔹 Dio Response: ${e.response?.data}");
+
+//       emit(
+//         AuthFailure(
+//           e.response?.data?['error'] ?? "An unexpected error occurred",
+//         ),
+//       );
+//     } catch (e) {
+//       emit(AuthFailure("An error occurred: $e"));
+//     }
+//   }
+
+//   /// ✅ دالة لإنشاء توكن عشوائي
+
+//   /// ✅ توليد توكن فريد باستخدام Random و DateTime
+//   String _generateToken() {
+//     final random = Random();
+//     final timestamp = DateTime.now().millisecondsSinceEpoch;
+//     final randomPart = random.nextInt(1000000); // جزء عشوائي لضمان الاختلاف
+//     return '$timestamp$randomPart';
+//   }
+
+//   /// ✅ التحقق من حالة المستخدم
+//   Future<void> checkAuthStatus() async {
+//     emit(AuthLoading());
+
+//     final accessToken = await AuthStorage.getValidAccessToken();
+//     if (accessToken != null) {
+//       emit(AuthSuccess(userId: "stored_user_id"));
+//     } else {
+//       emit(AuthInitial());
+//     }
+//   }
+
+//   /// ✅ تحديث التوكن
+//   Future<void> refreshToken() async {
+//     final refreshToken = await AuthStorage.getRefreshToken();
+//     if (refreshToken == null) {
+//       logout();
+//       return;
+//     }
+
+//     emit(AuthLoading());
+//     try {
+//       final response = await _dio.post(
+//         '/refresh',
+//         data: {'refresh_token': refreshToken},
+//       );
+
+//       if (response.statusCode == 200) {
+//         final data = response.data;
+
+//         if (data['access_token'] != null && data['refresh_token'] != null) {
+//           await AuthStorage.saveTokens(
+//             accessToken: data['access_token'],
+//             refreshToken: data['refresh_token'],
+//             expiresIn: data['expiresIn'],
+//           );
+//         }
+
+//         emit(AuthSuccess(userId: "stored_user_id"));
+//       } else {
+//         logout();
+//       }
+//     } on DioException catch (e) {
+//       print("Error while refreshing token: ${e.message}");
+//       logout();
+//     }
+//   }
+
+//   /// ✅ تسجيل الخروج
+//   Future<void> logout() async {
+//     await AuthStorage.clearTokens();
+//     stayConnected = false;
+//     emit(AuthInitial());
+//   }
+
+//   /// ✅ التحقق من كود OTP
+//   Future<void> verifyCode(String email, String code) async {
+//     emit(AuthLoading());
+//     try {
+//       final response = await _dio.post(
+//         '/verify-code',
+//         data: {'email': email, 'code': code},
+//       );
+
+//       if (response.statusCode == 200) {
+//         emit(VerifyCodeSuccess());
+//       } else {
+//         emit(AuthFailure("Invalid verification code"));
+//       }
+//     } on DioException {
+//       emit(AuthFailure("Network error, please check your connection"));
+//     }
+//   }
+
+//   /// ✅ تسجيل مستخدم جديد
+//   Future<void> register(
+//     String username,
+//     String email,
+//     String password,
+//     String confirmPassword,
+//   ) async {
+//     if (!_validateRegistrationFields(
+//       username,
+//       email,
+//       password,
+//       confirmPassword,
+//     )) {
+//       return;
+//     }
+
+//     emit(AuthLoading());
+
+//     try {
+//       final requestData = _buildRegisterRequest(username, email, password);
+//       final response = await _dio.post('/login', data: requestData);
+
+//       _handleRegisterResponse(response);
+//     } on DioException catch (e) {
+//       _handleDioError(e);
+//     } catch (e) {
+//       print("❌ Unknown Error: $e");
+//       emit(AuthFailure("An unexpected error occurred"));
+//     }
+//   }
+
+//   /// 🔹 إنشاء بيانات الطلب بشكل منظم
+//   Map<String, dynamic> _buildRegisterRequest(
+//     String username,
+//     String email,
+//     String password,
+//   ) {
+//     return {
+//       'username': username,
+//       'email': email,
+//       'password': password,
+//       'accessToken': _generateToken(),
+//       'refreshToken': _generateToken(),
+//       'expiresIn': DateTime.now().add(Duration(hours: 1)).toIso8601String(),
+//     };
+//   }
+
+//   /// 🔹 التعامل مع استجابة التسجيل
+//   void _handleRegisterResponse(Response response) async {
+//     print("🔹 Register Response Status: ${response.statusCode}");
+//     print("🔹 Register Response Data: ${response.data}");
+
+//     if (response.statusCode == 201) {
+//       final data = response.data;
+
+//       if (data != null && data.containsKey('id')) {
+//         final user = UserModel.fromJson(data);
+//         await _saveUserTokens(user);
+//         emit(
+//           AuthSuccess(
+//             userId: user.id,
+//             user: user,
+//             message: "Registration successful",
+//           ),
+//         );
+//       } else {
+//         print("❌ Missing 'id' field in response!");
+//         emit(AuthFailure("Registration failed: Missing user ID"));
+//       }
+//     } else {
+//       print("❌ Unexpected status code: ${response.statusCode}");
+//       emit(AuthFailure("Registration failed: ${response.statusCode}"));
+//     }
+//   }
+
+//   /// 🔹 حفظ التوكنات في التخزين
+//   Future<void> _saveUserTokens(UserModel user) async {
+//     await AuthStorage.saveTokens(
+//       accessToken: user.accessToken,
+//       refreshToken: user.refreshToken,
+//       expiresIn: user.expiresIn.toIso8601String(),
+//     );
+//   }
+
+//   /// 🔹 التعامل مع أخطاء Dio
+//   void _handleDioError(DioException e) {
+//     print("❌ DioException: ${e.message}");
+//     print("🔹 Dio Response: ${e.response?.data}");
+
+//     emit(
+//       AuthFailure(e.response?.data?['error'] ?? "An unexpected error occurred"),
+//     );
+//   }
+
+//   /// ✅ تغيير كلمة المرور
+//   Future<void> changePassword(String userId, String newPassword) async {
+//     if (!_validatePassword(newPassword)) return;
+
+//     emit(AuthLoading());
+//     try {
+//       final response = await _dio.put(
+//         '/users/$userId',
+//         data: {'password': newPassword},
+//       );
+
+//       if (response.statusCode == 200) {
+//         emit(
+//           AuthSuccess(userId: userId, message: "Password changed successfully"),
+//         );
+//       } else {
+//         emit(AuthFailure("Failed to change password"));
+//       }
+//     } on DioException catch (e) {
+//       emit(AuthFailure(e.response?.data['error'] ?? "An error occurred"));
+//     }
+//   }
+
+//   /// ✅ استعادة كلمة المرور
+//   Future<void> forgotPassword(String email) async {
+//     if (!Validators.isValidEmail(email)) {
+//       emit(AuthFailure("Please enter a valid email address"));
+//       return;
+//     }
+
+//     emit(AuthLoading());
+//     try {
+//       await Future.delayed(const Duration(seconds: 2)); // محاكاة الطلب
+//       emit(ForgotPasswordSuccess());
+//     } catch (e) {
+//       emit(AuthFailure("An error occurred"));
+//     }
+//   }
+
+//   /// ✅ تفعيل خيار "البقاء متصلاً"
+//   void toggleStayConnected(bool value) {
+//     stayConnected = value;
+//     emit(AuthStayConnectedChanged(stayConnected));
+//   }
+
+//   /// ✅ تسجيل الدخول عبر وسائل التواصل الاجتماعي
+//   void socialLogin(String platform) {
+//     emit(AuthSocialLogin(platform));
+//   }
+
+//   // 🔹 دوال المساعدة الخاصة
+
+//   bool _validateRegistrationFields(
+//     String username,
+//     String email,
+//     String password,
+//     String confirmPassword,
+//   ) {
+//     if ([username, email, password, confirmPassword].any((e) => e.isEmpty)) {
+//       emit(AuthFailure("All fields are required"));
+//       return false;
+//     }
+
+//     if (!Validators.passwordsMatch(password, confirmPassword)) {
+//       emit(AuthFailure("Passwords do not match"));
+//       return false;
+//     }
+
+//     if (!Validators.isValidEmail(email)) {
+//       emit(AuthFailure("Invalid email address"));
+//       return false;
+//     }
+//     return true;
+//   }
+
+//   bool _validatePassword(String password) {
+//     if (!Validators.isValidPassword(password)) {
+//       emit(
+//         AuthFailure(
+//           "Password must be at least 8 characters long, contain a letter, a number, and a special character.",
+//         ),
+//       );
+//       return false;
+//     }
+//     return true;
+//   }
+// }
