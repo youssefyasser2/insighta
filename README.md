@@ -19,3 +19,17 @@ If this is your first Flutter project, check out these resources:
 - [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
 
 For help with Flutter development, visit the [official documentation](https://docs.flutter.dev/) for tutorials, samples, and a full API reference.
+
+## Demo Video
+
+> **Note:** GitHub README cannot play videos directly from MEGA. You can download and watch the video using the link below:
+
+[Download and watch the demo video](https://mega.nz/file/SNYzRIRJ#-27QM5QGO2WcgXZHG3DD-twcok_E8ghuNm8kPFn_ab0)
+
+## Screenshots / GIFs (Optional)
+
+You can add screenshots or GIFs of the app to give users a quick preview of the interface:
+
+<p align="center">
+  <img src="assets/images/logo1.png" alt="Screenshot 1" width="250"/>
+</p>
